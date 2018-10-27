@@ -23,16 +23,22 @@ void setup() {
 void loop() {
   Serial.println(go);
   
-  if ((digitalRead(button_pin)==0) && (complete == 0)){
+  if (digitalRead(button_pin) && complete){
+    // button push and want to keep pouring
+    // bool do keep pouring
     go = true;
-    digitalWrite(valve_pin,HIGH);
+    digitalWrite(valve_pin,HIGH); // turn on solenoid
     Serial.print("pouring");
     }
   else if ((digitalRead(button_pin)==0) && (complete == 1)) {
+    // button push and don't want to keep pouring
+    // bool don't keep pouring
     go = false;
     Serial.print("finished");
     }
   if (digitalRead(button_pin)==1){
+    // button not pushed
+    // turn solenoid off
     digitalWrite(valve_pin,LOW);
     Serial.print("waiting");
     }

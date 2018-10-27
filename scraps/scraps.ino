@@ -1,4 +1,7 @@
-/*This code does something mysterious because someone didn't comment her code
+/*
+This is a possible alternate to valve_trigger
+
+
 
 ***NOTE***
 I'm using arduino's pinMode(INPUT_PULLUP), which eliminates the need for a pulldown resistor in the button circuit, so it can be cleaner. It works with a button between the pin and ground, so the default state will be "HIGH" rather than "LOW" (which is the opposite as before).

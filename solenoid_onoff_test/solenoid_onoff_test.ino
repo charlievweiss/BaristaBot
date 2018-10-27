@@ -10,7 +10,7 @@ void setup() {
 
 void loop() {
   digitalWrite(valve_pin,HIGH); //valve on
-  delay(500);
+  delay(1000);
   digitalWrite(valve_pin,LOW); //valve off
-  delay(500);
+  delay(1000);
 }
