@@ -1,36 +1,64 @@
-int sig = 8; //signal to begin grinding process
+int sig_pin = 8; //signal to begin grinding process
 int grind = 9; //powers motor to grind beans
 int contact = 10; //reads if switch is opened/closed 
+long start_time;
+long current_time;
+//long grind_time = 143000;  // time for 17g
+long grind_time = 5000;
 
-bool execute = false; //triggers process to begin
+bool complete = false; //triggers process to begin
 bool dumped = false; //indicates when lever has dumped beans
-
+bool set_timer = false;
+bool sig = false;
 
 void setup() {
   Serial.begin(9600);
-  pinMode(sig, INPUT);
+  pinMode(sig_pin, INPUT);
   pinMode(grind, OUTPUT);
   pinMode(contact, INPUT);
   digitalWrite(grind, LOW);
+//  start_time = millis();
 }
 
+void grinding(){
+    current_time = millis();
+    Serial.println(current_time - start_time);
+    
+    if (current_time-start_time < grind_time){
+      digitalWrite(grind,HIGH);
+      Serial.println("grinding");
+    }
+    if (current_time-start_time >= grind_time){
+      digitalWrite(grind,LOW);
+      complete = true;
+      }   
+    }
+  
+void reset(){
+  sig = false;
+  set_timer = false;
+  complete = false;  
+  }
+
 void loop() {
-  if(digitalRead(8)==HIGH) {
-    execute = true; 
+  Serial.println(complete);
+  if (digitalRead(sig_pin) == HIGH){
+    sig = true;
+    }
+  if (sig == true && complete==false) {
+    if (set_timer == false){
+      // The first time that the signal pin is high, this code will run once  
+      // to record the current time, then it will not run again.
+      start_time = millis();
+      set_timer = true;
+      }
+    grinding();
   }
-  //grinds when high signal is recieved 
-  if(execute==true && digitalRead(contact)==HIGH) {
-    digitalWrite(grind, HIGH);
-  }
-  //curs power when lever is dumping
-  else if(execute==true && digitalRead(contact)==LOW) {
-    digitalWrite(grind, LOW);
-    dumped = true; 
-  }
-  //resets when lever goes back to original position 
-  else if (dumped==true && digitalRead(contact)==HIGH) {
-    execute = false;
-    dumped = false; 
-    digitalWrite(grind, LOW);
-  }
+  if (complete==true){
+    Serial.println("Ready to receive new HIGH");
+    reset();
+    }
+  else {
+    digitalWrite(grind,LOW);
+    }
 }
