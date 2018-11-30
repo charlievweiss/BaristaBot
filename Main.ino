@@ -33,17 +33,66 @@
   http://www.arduino.cc/en/Tutorial/LiquidCrystalHelloWorld
 */
 
-int bean_level = A5;
-int water_level = A4;
-int cup_level = A3;
-int pour_pin = 6;
-int grind_pin = 5;
+// Set up for spiral 
+#include <Servo.h>
+int pan = 1;
+int tilt = 2;
+Servo panServo;
+Servo tiltServo;
+int panAngle = 0; //angle written to the pan servo
+int tiltAngle = 0; //angle written to the tilt servo
+double tiltCart = 0; //calculated cartesian tilt location
+double panCart = 0; //calculated cartesian pan location
+double spiral_r = 0.3; //radius of spiral, varies with time
+double min_rad = 0.3;
+double max_rad = 1.2;
+int duration = 4; //seconds to complete a full rotation
+double distance = 4; //distance from origin, cm
+float r_factor = 0.005; //increments max_rad
+int calibrate_pan = 49;
+int calibrate_tilt = 2;
+
+
+//Set up for valve
+//int signal_pin = 8;         // Pin that goes to high when water is at temp
+int valve = 3;             // Pin controlling solenoid valve
+//int grind_pin = 12;         // Pin signaling the grinder to start up
+long wet_filter = 5000;     // Pour for 5 seconds just to get the filter wet 
+long pause = 10000;     // Pause for 20 to wait for beans to drop in filter
+long bloom = 10000;    // Initial pour 15 seconds
+//long pause = 10000;         // Time between bloom and pour 20 seconds
+long pour_time = 10000;     // 30 seconds
+long grind_time = 30000;
+long brew_time = 10000;
+long longpour = 15000;
+long convey = 5000;
+long convey2 = 10000;
+long cup_time = 5000;
+
+bool button_press = false;
+bool coffee_prep = false;
+bool complete = false;
+bool water_hot = false;
+long elapsed;
+
+
+
+
+
+
+int bean_level = A0;
+int water_level = A1;
+int cup_level = A2;
+//int pour_pin = 6;
+int grind_pin = 10;
+int button = 11;
+int temp_pin = 12; //The pin that tells us if the water is hot
 long current_time;
 long start_time;
-long go_grind = 1000;
-long grind_time = 10000;
+//long go_grind = 1000;
+//long grind_time = 10000;
 bool stocked = false;
-bool set_timer = false;
+int set_timer = 0;
 
 
 // include the library code:
@@ -51,7 +100,7 @@ bool set_timer = false;
 
 // initialize the library by associating any needed LCD interface pin
 // with the arduino pin number it is connected to
-const int rs = 7, en = 8, d4 = 9, d5 = 10, d6 = 11, d7 = 12;
+const int rs = 4, en = 5, d4 = 6, d5 = 7, d6 = 8, d7 = 9;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 void setup() {
@@ -64,14 +113,72 @@ void setup() {
   pinMode(bean_level, INPUT);
   pinMode(water_level, INPUT);
   pinMode(cup_level, INPUT);
-  pinMode(pour_pin, OUTPUT);
-  pinMode(grind_pin, OUTPUT);
+//  pinMode(pour_pin, OUTPUT);
+//  pinMode(grind_pin, OUTPUT);
+
+
+
+  //from temp triggered pour
+  panServo.attach(pan);
+  tiltServo.attach(tilt);
+//  pinMode(signal_pin,INPUT);
+  pinMode(valve,OUTPUT);
+  pinMode(button,INPUT);
+  pinMode(grind_pin,OUTPUT);
+  Serial.begin(9600);
+  panServo.write(42);
+  tiltServo.write(85);
+
+  
 }
 
-void check_status() {
+void pour_on() {
+    digitalWrite(valve,HIGH);
+    spiral();
+//    Serial.println("Pouring");    
+  }
+void pour_off(){
+    digitalWrite(valve,LOW);
+    panServo.write(42);  // re-center the nozzle while waiting
+    tiltServo.write(85); // re-center the nozzle while waiting
+  }
 
-//  Serial.println(stocked);
+void spiral() {
+  //causes spiral to switch between spiraling in and out
+  if(spiral_r < min_rad) {
+    r_factor = r_factor * -1;
+  }
+  else if(spiral_r > max_rad) {
+    r_factor = r_factor * -1;
+  }
 
+  //varies radius of the circle with time to create spiral
+  spiral_r -= r_factor;
+  
+//  Serial.println(spiral_r);
+
+  //calculates cartesian coordinates of pan and tilt
+  panCart = spiral_r * cos(millis()*(2*M_PI/(duration*1000)));
+  tiltCart = spiral_r * sin(millis()*(2*M_PI/(duration*1000)));
+
+  //converts to spherical coordinates and adjusts for the location of the origin
+  panAngle = acos(panCart/(sqrt(pow(panCart, 2) + pow(distance, 2))))*(180/M_PI) - calibrate_pan;
+  tiltAngle = acos(tiltCart/(sqrt(pow(tiltCart, 2) + pow(distance, 2))))*(180/M_PI) - calibrate_tilt;
+  
+  panServo.write(panAngle);
+  tiltServo.write(tiltAngle);
+  delay(100);
+}
+
+void button_status() {
+  if (digitalRead(button) == HIGH){
+    button_press = true;
+    }
+  }
+
+void machine_status() {
+
+if (coffee_prep == false){
   if (analogRead(bean_level) > 500) {
     lcd.print("Refill beans pls");
     stocked = false;
@@ -85,8 +192,20 @@ void check_status() {
     stocked = false;
   }
   else {
-    lcd.print("Ready to brew      ");
+    lcd.print("Ready to grind beans");
     stocked = true;
+  }
+}
+
+if (coffee_prep == true){
+  if (digitalRead(temp_pin)==0) {
+    lcd.print("Water Heating");
+    water_hot = false;
+  }
+  else if(digitalRead(temp_pin)==1) {
+    lcd.print("Ready to brew!");
+    water_hot = true;
+    }
   }
   
 
@@ -97,43 +216,126 @@ void check_status() {
   //lcd.print(millis() / 1000);
 }
 
+
+void dispense(){
+  digitalWrite(20,HIGH);
+  // This is not the correct code, replace with dispensing code
+  
+  }
+
+int conveyor(int num_steps){
+  digitalWrite(21,HIGH);
+//  Serial.println(num_steps);
+  // This is not the correct code, replace with stepper code
+  
+  }
+
+
+
+void prep_coffee(){
+  current_time = millis();
+  elapsed = current_time - start_time;
+//  Serial.print(elapsed);
+//  Serial.print(",");
+  if (elapsed < wet_filter){
+    pour_on();
+    Serial.println("wetting filter");
+    }
+  else if (elapsed < wet_filter + pause){
+    pour_off();
+    Serial.println("draining filter");
+    }
+
+  else if (elapsed < wet_filter + pause + grind_time){
+    digitalWrite(grind_pin, HIGH);
+    Serial.print("grinding");
+    Serial.print(",");
+      if(elapsed < wet_filter + pause + cup_time){
+        dispense();
+        Serial.println("cup");
+        }
+      else if(elapsed < wet_filter + pause + cup_time + convey){
+        conveyor(10);
+        Serial.println("conveyor");
+      }
+  else if (elapsed > wet_filter + pause + grind_time) {
+    digitalWrite(grind_pin, LOW);
+    Serial.println("Finished prepping");
+//    start_time = wet_filter + pause + grind_time;
+    coffee_prep = true;
+    }
+  }
+}
+
+
 void brew_coffee(){
   current_time = millis();
-//  Serial.println(current_time - start_time);
-  if (current_time - start_time < go_grind){
-    digitalWrite(grind_pin, HIGH);
-    Serial.println("Grinding");
+  elapsed = current_time - start_time;
+//  Serial.println(elapsed);
+  if (elapsed < bloom){
+    pour_on();
     }
-  else if (current_time - start_time <= grind_time){
-    digitalWrite(grind_pin,LOW);
-    } 
-  else if (current_time - start_time <= grind_time+5000){
-    digitalWrite(pour_pin,HIGH);
-    Serial.println("Pouring");
+  else if(elapsed < bloom + pause){
+    pour_off();
     }
-  else if (current_time - start_time >= grind_time+5000){
-    digitalWrite(pour_pin,LOW);
-    Serial.println("Finished");
+  else if(elapsed < bloom + pause + longpour){
+    pour_on();
+    }
+  else if(elapsed < bloom + pause + longpour + brew_time){
+    pour_off();
+    }
+  else if(elapsed < bloom + pause + longpour + brew_time + convey2){
+    conveyor(10);
     }  
+  else{
+    complete = true;
+    }  
+}
+
+    
+void reset(){
+  coffee_prep = false;
+  complete = false;
+  set_timer = 0;
+  stocked = false;
+  button_press = false;
   }
 
-void reset(){
-  set_timer = false;
-  }
 
 void loop() {
-  check_status();
-  current_time = millis();
-  if (stocked == true){
+  machine_status();
+  button_status();
+//  current_time = millis();
+  if (stocked == true && button_press == true && complete == false){
 //  Serial.println("stocked");
-    if (set_timer == false){
-      start_time = millis();
-      set_timer = true;
+    
+      if (coffee_prep == false){
+        if (set_timer == 0){
+          Serial.println(start_time);
+          start_time = millis();
+          set_timer = 1;
+          }
+        prep_coffee();
       }
-      brew_coffee();
-  }
-  else {
+//      if (coffee_prep == true && water_hot == true){    THIS IS THE ACTUAL IF STATEMENT
+     if (coffee_prep == true){
+        Serial.println("ENTERING BREW");
+        if (set_timer == 1){
+          Serial.println(start_time);
+          start_time = millis();
+          set_timer = 2;          // ASK maya, this a really janky way of keeping time, but it will work
+          }
+        brew_coffee();
+        }
+  
+      }
+  
+  else if (stocked == false && button_press == true){
     Serial.println("Check machine status");
+    }
+  else {
+//    Serial.println("Waiting");
     digitalWrite(grind_pin,LOW);
+    // write an all low function
     }
   }
